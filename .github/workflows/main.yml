@@ -1,7 +1,7 @@
 name: "Daily Automatic reminder for LeetCode Revision"
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '30 18 * * *'
   workflow_dispatch:
 jobs:
   execute-script:
