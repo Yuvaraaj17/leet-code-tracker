@@ -4,7 +4,7 @@ import open from 'open';
 import path from 'path';
 import { google } from 'googleapis';
 
-dotenv.config({ path: path.resolve(process.cwd(), '../.env') }); // only for dev env should be commented for prod
+// dotenv.config({ path: path.resolve(process.cwd(), '../.env') }); // only for dev env should be commented for prod
 
 const app = express();
 

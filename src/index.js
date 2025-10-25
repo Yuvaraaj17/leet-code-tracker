@@ -2,7 +2,7 @@ import dotenv from 'dotenv'
 import path from 'path'
 import { google } from "googleapis"
 
-dotenv.config({ path: path.resolve(process.cwd(), '../.env') }); // only for dev env should be commented for prod
+// dotenv.config({ path: path.resolve(process.cwd(), '../.env') }); // only for dev env should be commented for prod
 
 const SESSION_COOKIE = process.env.LEETCODE_SESSION_COOKIE
 const CSRF_TOKEN = process.env.LEETCODE_CSRF_TOKEN
