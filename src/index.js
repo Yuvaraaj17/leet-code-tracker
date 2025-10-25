@@ -1,8 +1,9 @@
 import dotenv from 'dotenv'
 import path from 'path'
 import { google } from "googleapis"
+import { DateTime } from 'luxon';
 
-// dotenv.config({ path: path.resolve(process.cwd(), '../.env') }); // only for dev env should be commented for prod
+dotenv.config({ path: path.resolve(process.cwd(), '../.env') }); // only for dev env should be commented for prod
 
 const SESSION_COOKIE = process.env.LEETCODE_SESSION_COOKIE
 const CSRF_TOKEN = process.env.LEETCODE_CSRF_TOKEN
@@ -70,12 +71,17 @@ async function fetchSubmissions() {
     const data = await response.json();
     const submissions = data.data.recentAcSubmissionList;
 
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
+    const now = DateTime.now().setZone("Asia/Kolkata");
+    const startOfToday = now.startOf('day').toSeconds();
     const startOfYesterday = startOfToday - 24 * 60 * 60;
 
-    const yesterdaySubs = submissions.filter(s => s.timestamp >= startOfYesterday && s.timestamp < startOfToday);
-    const uniqueQs = [...new Set(yesterdaySubs.map(s => `${allQuestionsMap[s.titleSlug]} ${s.title}`))];
+    const yesterdaySubs = submissions.filter(
+        s => s.timestamp >= startOfYesterday && s.timestamp < startOfToday
+    );
+
+    const uniqueQs = [...new Set(yesterdaySubs.map(
+        s => `${allQuestionsMap[s.titleSlug]} ${s.title}`
+    ))];
 
     return uniqueQs;
 }
@@ -94,21 +100,19 @@ async function createReminder(problems) {
 
     const dates = [3, 7, 15];
 
-    const now = new Date();
-    const baseTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 21, 30); // 9 AM today
+    const baseTime = DateTime.now().setZone("Asia/Kolkata").minus({ days: 1 }).set({ hour: 21, minute: 30, second: 0, millisecond: 0 });
 
 
     for (const date of dates) {
-        const nextDate = new Date(baseTime);
-        nextDate.setDate(baseTime.getDate() + date);
-        const startTime = new Date(nextDate);
-        const endTime = new Date(nextDate.getTime() + 30 * 60 * 1000); // 30 min event
+        const startTime = baseTime.plus({ days: date });
+        const endTime = startTime.plus({ minutes: 30 });
+
         const event = {
-            summary: `LeetCode Revision`,
-            description: `Problems solved on ${baseTime.getDate()}-${baseTime.getMonth() + 1}-${baseTime.getFullYear()}:\n${problems.join('\n')}`,
-            start: { dateTime: startTime.toISOString(), timeZone: 'Asia/Kolkata' },
-            end: { dateTime: endTime.toISOString(), timeZone: 'Asia/Kolkata' },
-            colorId: 5
+            summary: "LeetCode Revision",
+            description: `Problems solved on ${baseTime.toFormat("dd-LL-yyyy")}:\n${problems.join('\n')}`,
+            start: { dateTime: startTime.toISO(), timeZone: "Asia/Kolkata" },
+            end: { dateTime: endTime.toISO(), timeZone: "Asia/Kolkata" },
+            colorId: "5" // Yellow
         };
 
         try {
@@ -116,9 +120,9 @@ async function createReminder(problems) {
                 calendarId: 'primary',
                 resource: event
             }).then((res)=>{
-                if(res.ok) console.log(`✅ Created event on ${startTime.toLocaleString('en-IN')}`)});
+                if(res.ok) console.log(`✅ Created event on ${startTime.toFormat("dd-LL-yyyy HH:mm")}`)});
         } catch (err) {
-            console.error(`❌ Failed for day ${baseTime.getDate()}-${baseTime.getMonth() + 1}-${baseTime.getFullYear()}:`, err.message);
+            console.error(`❌ Failed for ${startTime.toFormat("dd-LL-yyyy")}:`, err.message);
         }
     }
 }
