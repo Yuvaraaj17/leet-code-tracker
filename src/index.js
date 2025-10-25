@@ -118,7 +118,7 @@ async function createReminder(problems) {
             }).then((res)=>{
                 if(res.ok) console.log(`✅ Created event on ${startTime.toLocaleString('en-IN')}`)});
         } catch (err) {
-            console.error(`❌ Failed for day ${offset}:`, err.message);
+            console.error(`❌ Failed for day ${baseTime.getDate()}-${baseTime.getMonth() + 1}-${baseTime.getFullYear()}:`, err.message);
         }
     }
 }
