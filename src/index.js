@@ -3,35 +3,44 @@ import path from 'path'
 import { google } from "googleapis"
 import { DateTime } from 'luxon';
 
-dotenv.config({ path: path.resolve(process.cwd(), '../.env') }); // only for dev env should be commented for prod
+// dotenv.config({ path: path.resolve(process.cwd(), '../.env') }); // only for dev env should be commented for prod
 
 const SESSION_COOKIE = process.env.LEETCODE_SESSION_COOKIE
 const CSRF_TOKEN = process.env.LEETCODE_CSRF_TOKEN
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
 const REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN
+const USERNAME = process.env.LEETCODE_USERNAME
 
 const allQuestionsMap = {}
 
 async function getAllQuestion() {
-    const response = await fetch("https://leetcode.com/graphql/", {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Referer': 'https://leetcode.com',
-            'x-csrftoken': CSRF_TOKEN,
-            'Cookie': `LEETCODE_SESSION=${SESSION_COOKIE}; csrftoken=${CSRF_TOKEN}`
-        },
-        body: JSON.stringify({ query: "query { allQuestions { titleSlug questionId } }" })
-    })
+    try {
+        const response = await fetch("https://leetcode.com/graphql/", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Referer': 'https://leetcode.com',
+                'x-csrftoken': CSRF_TOKEN,
+                'Cookie': `LEETCODE_SESSION=${SESSION_COOKIE}; csrftoken=${CSRF_TOKEN}`
+            },
+            body: JSON.stringify({ query: "query { allQuestions { titleSlug questionId difficulty } }" })
+        });
 
-    const data = await response.json()
+        if (!response.ok) {
+            console.error(`❌ Failed to fetch questions: ${response.status} ${response.statusText}`);
+            return;
+        }
 
-    const allQuestions = data.data.allQuestions || [];
-    allQuestions.forEach(question => {
-        allQuestionsMap[question.titleSlug] = question.questionId
-    });
-
+        const data = await response.json();
+        const allQuestions = data.data.allQuestions || [];
+        allQuestions.forEach(question => {
+            allQuestionsMap[question.titleSlug] = { id: question.questionId, difficulty: question.difficulty };
+        });
+        console.log(`✅ Loaded ${allQuestions.length} questions.`);
+    } catch (error) {
+        console.error("❌ Error in getAllQuestion:", error);
+    }
 }
 
 async function fetchSubmissions() {
@@ -47,7 +56,7 @@ async function fetchSubmissions() {
         } 
     }`
 
-    const variables = { username: "yuvaraaj5910", "limit": 50 }
+    const variables = { username: USERNAME, "limit": 50 }
 
     const response = await fetch("https://leetcode.com/graphql/",
 
@@ -76,11 +85,27 @@ async function fetchSubmissions() {
     const startOfYesterday = startOfToday - 24 * 60 * 60;
 
     const yesterdaySubs = submissions.filter(
-        s => s.timestamp >= startOfYesterday && s.timestamp < startOfToday
+        s => {
+            const timestamp = Number(s.timestamp);
+            const isYesterday = timestamp >= startOfYesterday && timestamp < startOfToday;
+            if (!isYesterday) return false;
+
+            const questionData = allQuestionsMap[s.titleSlug];
+            // If we don't have data, assume we keep it (or discard safely?). 
+            // But usually we should have it. Let's filter if difficulty is Easy.
+            // commented for testing
+            // if (questionData && questionData.difficulty === 'Easy') {
+            //     return false;
+            // }
+            return true;
+        }
     );
 
     const uniqueQs = [...new Set(yesterdaySubs.map(
-        s => `${allQuestionsMap[s.titleSlug]} ${s.title}`
+        s => {
+            const questionData = allQuestionsMap[s.titleSlug];
+            return questionData ? `${questionData.id}. ${s.title} (${questionData.difficulty})` : s.title;
+        }
     ))];
 
     return uniqueQs;
@@ -119,8 +144,10 @@ async function createReminder(problems) {
             await calendar.events.insert({
                 calendarId: 'primary',
                 resource: event
-            }).then((res)=>{
-                if(res.ok) console.log(`✅ Created event on ${startTime.toFormat("dd-LL-yyyy HH:mm")}`)});
+            }).then((res) => {
+                if (res.status === 200) console.log(`✅ Created event for ${startTime.toFormat("dd-LL-yyyy")}`);
+                else console.log(`⚠️ Request sent but status was ${res.status} for ${startTime.toFormat("dd-LL-yyyy")}`);
+            });
         } catch (err) {
             console.error(`❌ Failed for ${startTime.toFormat("dd-LL-yyyy")}:`, err.message);
         }
@@ -129,15 +156,18 @@ async function createReminder(problems) {
 
 (async () => {
     try {
-        const _ = await getAllQuestion();
+        console.log("🚀 Starting LeetCode Tracker...");
+        await getAllQuestion();
         const problems = await fetchSubmissions();
-        console.log(problems)
+
         if (problems.length === 0) {
-            console.log('No problems solved yesterday.');
-            return;
+            console.log('ℹ️ No problems solved yesterday.');
+        } else {
+            console.log(`🔍 Found ${problems.length} problems solved yesterday:`, problems);
+            await createReminder(problems);
         }
-        await createReminder(problems);
     } catch (err) {
-        console.error(err);
+        console.error("❌ Fatal Error:", err);
+        process.exit(1);
     }
 })();
