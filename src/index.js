@@ -1,5 +1,5 @@
-import dotenv from 'dotenv'
-import path from 'path'
+// import dotenv from 'dotenv'
+// import path from 'path'
 import { google } from "googleapis"
 import { DateTime } from 'luxon';
 
@@ -94,9 +94,9 @@ async function fetchSubmissions() {
             // If we don't have data, assume we keep it (or discard safely?). 
             // But usually we should have it. Let's filter if difficulty is Easy.
             // commented for testing
-            // if (questionData && questionData.difficulty === 'Easy') {
-            //     return false;
-            // }
+            if (questionData && questionData.difficulty === 'Easy') {
+                return false;
+            }
             return true;
         }
     );
@@ -131,25 +131,67 @@ async function createReminder(problems) {
     for (const date of dates) {
         const startTime = baseTime.plus({ days: date });
         const endTime = startTime.plus({ minutes: 30 });
-
-        const event = {
-            summary: "LeetCode Revision",
-            description: `Problems solved on ${baseTime.toFormat("dd-LL-yyyy")}:\n${problems.join('\n')}`,
-            start: { dateTime: startTime.toISO(), timeZone: "Asia/Kolkata" },
-            end: { dateTime: endTime.toISO(), timeZone: "Asia/Kolkata" },
-            colorId: "5" // Yellow
-        };
+        const targetDateISO = startTime.toISODate(); // "YYYY-MM-DD"
 
         try {
-            await calendar.events.insert({
+            // 🔍 Search for existing event on this day with exact summary
+            const eventsRes = await calendar.events.list({
                 calendarId: 'primary',
-                resource: event
-            }).then((res) => {
-                if (res.status === 200) console.log(`✅ Created event for ${startTime.toFormat("dd-LL-yyyy")}`);
-                else console.log(`⚠️ Request sent but status was ${res.status} for ${startTime.toFormat("dd-LL-yyyy")}`);
+                timeMin: startTime.minus({ hours: 1 }).toISO(), // Search around the time
+                timeMax: endTime.plus({ hours: 1 }).toISO(),
+                q: "LeetCode Revision",
+                singleEvents: true,
             });
+
+            const existingEvent = eventsRes.data.items && eventsRes.data.items.find(e => e.summary === "LeetCode Revision");
+
+            if (existingEvent) {
+                console.log(`ℹ️ Finding existing event for ${targetDateISO}... Found! Updating...`);
+
+                // Append new problems to existing description
+                const oldDescription = existingEvent.description || "";
+
+                // Avoid duplicating if script runs multiple times
+                const newProblems = problems.filter(p => !oldDescription.includes(p));
+
+                if (newProblems.length === 0) {
+                    console.log(`⚠️ No new problems to add for ${targetDateISO}.`);
+                    continue;
+                }
+
+                const updatedDescription = `${oldDescription}\n\nProblems solved on ${baseTime.toFormat("dd-LL-yyyy")}:\n${newProblems.join('\n')}`;
+
+                await calendar.events.patch({
+                    calendarId: 'primary',
+                    eventId: existingEvent.id,
+                    resource: {
+                        description: updatedDescription
+                    }
+                });
+                console.log(`✅ Updated event for ${targetDateISO}`);
+
+            } else {
+                // 🆕 Create New Event
+                console.log(`ℹ️ No existing event for ${targetDateISO}. Creating new...`);
+                const event = {
+                    summary: "LeetCode Revision",
+                    description: `Problems solved on ${baseTime.toFormat("dd-LL-yyyy")}:\n${problems.join('\n')}`,
+                    start: { dateTime: startTime.toISO(), timeZone: "Asia/Kolkata" },
+                    end: { dateTime: endTime.toISO(), timeZone: "Asia/Kolkata" },
+                    colorId: "5" // Yellow
+                };
+
+                await calendar.events.insert({
+                    calendarId: 'primary',
+                    resource: event
+                }).then((res) => {
+                    if (res.status === 200) console.log(`✅ Created event for ${targetDateISO}`);
+                    else console.log(`⚠️ Request sent but status was ${res.status} for ${targetDateISO}`);
+                });
+            }
+
         } catch (err) {
-            console.error(`❌ Failed for ${startTime.toFormat("dd-LL-yyyy")}:`, err.message);
+            console.error(`❌ Failed for ${targetDateISO}:`, err.message);
         }
     }
 }
