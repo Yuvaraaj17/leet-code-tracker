@@ -1,3 +1,3 @@
-import { scheduleForRevision } from ".";
+import { scheduleForRevision } from "./index.js";
 
 await scheduleForRevision();
