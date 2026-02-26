@@ -5,26 +5,17 @@ import { DateTime } from 'luxon';
 
 // dotenv.config({ path: path.resolve(process.cwd(), '../.env') }); // only for dev env should be commented for prod
 
-const SESSION_COOKIE = process.env.LEETCODE_SESSION_COOKIE
-const CSRF_TOKEN = process.env.LEETCODE_CSRF_TOKEN
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID
-const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
-const REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN
-const USERNAME = process.env.LEETCODE_USERNAME
-
-const allQuestionsMap = {}
-
-async function getAllQuestion() {
+export async function getAllQuestion({ leetcodeURL, leetcodeReferer, leetcodeQuery, csrfToken, sessionCookie}) {
     try {
-        const response = await fetch("https://leetcode.com/graphql/", {
+        const response = await fetch(leetcodeURL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Referer': 'https://leetcode.com',
-                'x-csrftoken': CSRF_TOKEN,
-                'Cookie': `LEETCODE_SESSION=${SESSION_COOKIE}; csrftoken=${CSRF_TOKEN}`
+                'Referer': leetcodeReferer,
+                'x-csrftoken': csrfToken,
+                'Cookie': `LEETCODE_SESSION=${sessionCookie}; csrftoken=${csrfToken}`
             },
-            body: JSON.stringify({ query: "query { allQuestions { titleSlug questionId difficulty } }" })
+            body: JSON.stringify({ query: leetcodeQuery })
         });
 
         if (!response.ok) {
@@ -34,41 +25,32 @@ async function getAllQuestion() {
 
         const data = await response.json();
         const allQuestions = data.data.allQuestions || [];
+        const allQuestionsMap = {};
         allQuestions.forEach(question => {
             allQuestionsMap[question.titleSlug] = { id: question.questionId, difficulty: question.difficulty };
         });
         console.log(`✅ Loaded ${allQuestions.length} questions.`);
+        return allQuestionsMap;
     } catch (error) {
         console.error("❌ Error in getAllQuestion:", error);
     }
 }
 
-async function fetchSubmissions() {
-    const query = `
-    query recentAcSubmissions($username: String!, $limit: Int!) 
-    { 
-        recentAcSubmissionList(username: $username, limit: $limit) 
-        { 
-            id 
-            title 
-            titleSlug 
-            timestamp 
-        } 
-    }`
+export async function fetchSubmissions({ leetcodeURL, leetcodeReferer, leetcodeQuery, leetcodeUserName, csrfToken, sessionCookie, allQuestionsMap }) {
 
-    const variables = { username: USERNAME, "limit": 50 }
+    const variables = { username: leetcodeUserName, "limit": 50 }
 
-    const response = await fetch("https://leetcode.com/graphql/",
+    const response = await fetch(leetcodeURL,
 
         {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Referer': 'https://leetcode.com',
-                'x-csrftoken': CSRF_TOKEN,
-                'Cookie': `LEETCODE_SESSION=${SESSION_COOKIE}; csrftoken=${CSRF_TOKEN}`
+                'Referer': leetcodeReferer,
+                'x-csrftoken': csrfToken,
+                'Cookie': `LEETCODE_SESSION=${sessionCookie}; csrftoken=${csrfToken}`
             },
-            body: JSON.stringify({ query: query, variables: variables, operationName: "recentAcSubmissions" })
+            body: JSON.stringify({ query: leetcodeQuery, variables: variables, operationName: "recentAcSubmissions" })
         }
     )
 
@@ -111,15 +93,15 @@ async function fetchSubmissions() {
     return uniqueQs;
 }
 
-async function createReminder(problems) {
+export async function createReminder(problems, googleClientID, googleClientSecret, googleRefreshToken, ) {
 
 
     const oauthclient = new google.auth.OAuth2(
-        CLIENT_ID,
-        CLIENT_SECRET
+        googleClientID,
+        googleClientSecret
     )
 
-    oauthclient.setCredentials({ refresh_token: REFRESH_TOKEN })
+    oauthclient.setCredentials({ refresh_token: googleRefreshToken })
 
     const calendar = google.calendar({ version: "v3", auth: oauthclient })
 
@@ -196,11 +178,29 @@ async function createReminder(problems) {
     }
 }
 
-(async () => {
+export async function scheduleForRevision () {
+    const LEETCODE_URL = "https://leetcode.com/graphql/";
+    const LEETCODE_REFERER = "https://leetcode.com";
+    const LEETCODE_QUESTIONS_QUERY = "query { allQuestions { titleSlug questionId difficulty } }";
+    const LEETCODE_SUBMISSIONS_QUERY = `
+    query recentAcSubmissions($username: String!, $limit: Int!) 
+    { 
+        recentAcSubmissionList(username: $username, limit: $limit) 
+        { 
+            id 
+            title 
+            titleSlug 
+            timestamp 
+        } 
+    }`
+    const CSRF_TOKEN = process.env.LEETCODE_CSRF_TOKEN;
+    const SESSION_COOKIE = process.env.LEETCODE_SESSION_COOKIE;
+    const LEETCODE_USERNAME = process.env.LEETCODE_USERNAME;
+
     try {
         console.log("🚀 Starting LeetCode Tracker...");
-        await getAllQuestion();
-        const problems = await fetchSubmissions();
+        const questionsResult = await getAllQuestion({LEETCODE_URL, LEETCODE_REFERER, LEETCODE_QUESTIONS_QUERY, CSRF_TOKEN, SESSION_COOKIE});
+        const problems = await fetchSubmissions({LEETCODE_URL, LEETCODE_REFERER, LEETCODE_SUBMISSIONS_QUERY, LEETCODE_USERNAME, CSRF_TOKEN, SESSION_COOKIE, questionsResult});
 
         if (problems.length === 0) {
             console.log('ℹ️ No problems solved yesterday.');
@@ -212,4 +212,4 @@ async function createReminder(problems) {
         console.error("❌ Fatal Error:", err);
         process.exit(1);
     }
-})();
+}
