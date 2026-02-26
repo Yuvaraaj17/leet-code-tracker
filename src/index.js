@@ -93,7 +93,7 @@ export async function fetchSubmissions({ leetcodeURL, leetcodeReferer, leetcodeQ
     return uniqueQs;
 }
 
-export async function createReminder(problems, googleClientID, googleClientSecret, googleRefreshToken, ) {
+export async function createReminder(problems, googleClientID, googleClientSecret, googleRefreshToken) {
 
 
     const oauthclient = new google.auth.OAuth2(
@@ -199,8 +199,22 @@ export async function scheduleForRevision () {
 
     try {
         console.log("🚀 Starting LeetCode Tracker...");
-        const questionsResult = await getAllQuestion({LEETCODE_URL, LEETCODE_REFERER, LEETCODE_QUESTIONS_QUERY, CSRF_TOKEN, SESSION_COOKIE});
-        const problems = await fetchSubmissions({LEETCODE_URL, LEETCODE_REFERER, LEETCODE_SUBMISSIONS_QUERY, LEETCODE_USERNAME, CSRF_TOKEN, SESSION_COOKIE, questionsResult});
+        const questionsResult = await getAllQuestion({
+          leetcodeURL: LEETCODE_URL,
+          leetcodeReferer: LEETCODE_REFERER,
+          leetcodeQuery: LEETCODE_QUESTIONS_QUERY,
+          csrfToken: CSRF_TOKEN,
+          sessionCookie: SESSION_COOKIE,
+        });
+        const problems = await fetchSubmissions({
+          leetcodeURL: LEETCODE_URL,
+          leetcodeReferer: LEETCODE_REFERER,
+          leetcodeQuery: LEETCODE_SUBMISSIONS_QUERY,
+          leetcodeUserName: LEETCODE_USERNAME,
+          csrfToken: CSRF_TOKEN,
+          sessionCookie: SESSION_COOKIE,
+          allQuestionsMap: questionsResult, // also this was wrong — you had questionsResult but function expects allQuestionsMap
+        });
 
         if (problems.length === 0) {
             console.log('ℹ️ No problems solved yesterday.');
