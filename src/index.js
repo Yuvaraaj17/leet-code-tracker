@@ -174,6 +174,7 @@ export async function createReminder({problems, googleClientID, googleClientSecr
 
         } catch (err) {
             console.error(`❌ Failed for ${targetDateISO}:`, err.message);
+            process.exit(1);
         }
     }
 }
