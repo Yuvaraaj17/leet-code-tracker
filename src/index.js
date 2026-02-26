@@ -93,7 +93,7 @@ export async function fetchSubmissions({ leetcodeURL, leetcodeReferer, leetcodeQ
     return uniqueQs;
 }
 
-export async function createReminder(problems, googleClientID, googleClientSecret, googleRefreshToken) {
+export async function createReminder({problems, googleClientID, googleClientSecret, googleRefreshToken}) {
 
 
     const oauthclient = new google.auth.OAuth2(
@@ -196,6 +196,9 @@ export async function scheduleForRevision () {
     const CSRF_TOKEN = process.env.LEETCODE_CSRF_TOKEN;
     const SESSION_COOKIE = process.env.LEETCODE_SESSION_COOKIE;
     const LEETCODE_USERNAME = process.env.LEETCODE_USERNAME;
+    const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+    const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+    const GOOGLE_REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN
 
     try {
         console.log("🚀 Starting LeetCode Tracker...");
@@ -220,7 +223,12 @@ export async function scheduleForRevision () {
             console.log('ℹ️ No problems solved yesterday.');
         } else {
             console.log(`🔍 Found ${problems.length} problems solved yesterday:`, problems);
-            await createReminder(problems);
+            await createReminder({
+                problems: problems,
+                googleClientID: GOOGLE_CLIENT_ID,
+                googleClientSecret: GOOGLE_CLIENT_SECRET,
+                googleRefreshToken: GOOGLE_REFRESH_TOKEN
+            });
         }
     } catch (err) {
         console.error("❌ Fatal Error:", err);
